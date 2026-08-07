@@ -32,38 +32,10 @@ export class MyApp extends LitElement {
             width: 100%;
         }
 
-        .app-heading {
-            align-items: center;
-        }
-
-        .app-icon {
-            color: var(--bkper-color-primary);
-            font-size: var(--bkper-font-size-large);
-        }
-
-        .heading-copy,
-        .history-heading {
-            min-width: 0;
-        }
-
-        h1,
-        h2,
         p {
             margin: 0;
         }
 
-        h1 {
-            font-size: var(--bkper-font-size-large);
-            font-weight: var(--bkper-font-weight-bold);
-        }
-
-        h2 {
-            font-size: var(--bkper-font-size-medium);
-            font-weight: var(--bkper-font-weight-bold);
-        }
-
-        .subtitle,
-        .hint,
         .empty-history {
             color: var(--bkper-color-neutral);
             font-size: var(--bkper-font-size-small);
@@ -75,19 +47,37 @@ export class MyApp extends LitElement {
             --spacing: var(--bkper-spacing-large);
         }
 
-        .calculation-form,
-        .history-list,
-        .status-panel {
+        .calculation-form {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            align-items: center;
+            gap: var(--bkper-spacing-small, 0.75rem);
             width: 100%;
+        }
+
+        .history-list,
+        .status-panel,
+        .history-section {
+            width: 100%;
+        }
+
+        .history-section {
+            display: flex;
+            flex-direction: column;
         }
 
         .calculation-form wa-input {
+            min-width: 0;
             width: 100%;
         }
 
-        .history-heading {
-            align-items: center;
-            justify-content: space-between;
+        .calculation-form wa-button::part(base) {
+            min-width: 4.5rem;
+        }
+
+        .clear-history-button {
+            align-self: flex-end;
+            margin-inline-start: auto;
         }
 
         .history-entry {
@@ -163,7 +153,7 @@ export class MyApp extends LitElement {
             this.focusedInitialInput = true;
         }
 
-        return this.renderCalculator(state);
+        return this.renderCalculator();
     }
 
     protected updated(_changedProperties: PropertyValues): void {
@@ -211,22 +201,13 @@ export class MyApp extends LitElement {
         `;
     }
 
-    private renderCalculator(state: AppState) {
+    private renderCalculator() {
         return html`
             <div class="calculator-shell wa-stack wa-gap-l">
-                <header class="app-heading wa-cluster wa-gap-s">
-                    <wa-icon class="app-icon" name="calculator" label="Calculator"></wa-icon>
-                    <div class="heading-copy wa-stack wa-gap-3xs">
-                        <h1>Calculator</h1>
-                        <p class="subtitle">${state.bookName}</p>
-                    </div>
-                </header>
-
                 <wa-card class="calculation-card" appearance="outlined">
-                    <form class="calculation-form wa-stack wa-gap-s" @submit=${this.handleSubmit}>
+                    <form class="calculation-form" @submit=${this.handleSubmit}>
                         <wa-input
-                            label="Calculation"
-                            hint="Use +, -, *, /, parentheses, and decimal numbers."
+                            aria-label="Expression"
                             placeholder="3000 - 2000"
                             .value=${this.expression}
                             autofocus
@@ -237,20 +218,24 @@ export class MyApp extends LitElement {
                             @input=${this.handleInput}
                             @keydown=${this.handleKeydown}
                         ></wa-input>
-                        <div class="actions wa-cluster wa-gap-xs">
-                            <wa-button type="submit" variant="brand">
-                                <wa-icon slot="start" name="equals"></wa-icon>
-                                Calculate
-                            </wa-button>
-                            <wa-button
-                                type="button"
-                                variant="neutral"
-                                appearance="outlined"
-                                @click=${this.handleClearInput}
-                            >
-                                Clear
-                            </wa-button>
-                        </div>
+                        <wa-button
+                            class="calculate-button"
+                            type="submit"
+                            variant="brand"
+                            aria-label="Calculate"
+                        >
+                            <wa-icon name="equals" aria-hidden="true"></wa-icon>
+                        </wa-button>
+                        <wa-button
+                            class="clear-button"
+                            type="button"
+                            variant="neutral"
+                            appearance="outlined"
+                            aria-label="Clear"
+                            @click=${this.handleClearInput}
+                        >
+                            C
+                        </wa-button>
                     </form>
                 </wa-card>
 
@@ -271,48 +256,51 @@ export class MyApp extends LitElement {
 
     private renderHistory() {
         return html`
-            <wa-card class="history-card" appearance="outlined">
-                <div class="history-heading wa-cluster wa-gap-s" slot="header">
-                    <h2>History</h2>
+            <div class="history-section wa-stack wa-gap-xs">
+                <wa-card class="history-card" appearance="outlined">
                     ${
-                        this.historyEntries.length > 0
-                            ? html`
-                                  <wa-button
-                                      type="button"
-                                      variant="neutral"
-                                      appearance="plain"
-                                      size="s"
-                                      @click=${this.handleClearHistory}
-                                  >
-                                      Clear history
-                                  </wa-button>
+                        this.historyEntries.length === 0
+                            ? html`<p class="empty-history">Your calculations will appear here.</p>`
+                            : html`
+                                  <div class="history-list wa-stack wa-gap-xs" role="list">
+                                      ${this.historyEntries.map(
+                                          entry => html`
+                                              <wa-button
+                                                  class="history-entry"
+                                                  type="button"
+                                                  variant="neutral"
+                                                  appearance="outlined"
+                                                  @click=${() => this.restoreHistory(entry)}
+                                              >
+                                                  <span class="expression"
+                                                      >${entry.expression}</span
+                                                  >
+                                                  <span class="result">${entry.result}</span>
+                                              </wa-button>
+                                          `
+                                      )}
+                                  </div>
                               `
-                            : ''
                     }
-                </div>
+                </wa-card>
                 ${
-                    this.historyEntries.length === 0
-                        ? html`<p class="empty-history">Your calculations will appear here.</p>`
-                        : html`
-                              <div class="history-list wa-stack wa-gap-xs" role="list">
-                                  ${this.historyEntries.map(
-                                      entry => html`
-                                          <wa-button
-                                              class="history-entry"
-                                              type="button"
-                                              variant="neutral"
-                                              appearance="outlined"
-                                              @click=${() => this.restoreHistory(entry)}
-                                          >
-                                              <span class="expression">${entry.expression}</span>
-                                              <span class="result">${entry.result}</span>
-                                          </wa-button>
-                                      `
-                                  )}
-                              </div>
+                    this.historyEntries.length > 0
+                        ? html`
+                              <wa-button
+                                  class="clear-history-button"
+                                  type="button"
+                                  variant="neutral"
+                                  appearance="plain"
+                                  size="s"
+                                  aria-label="Clear history"
+                                  @click=${this.handleClearHistory}
+                              >
+                                  Clear history
+                              </wa-button>
                           `
+                        : ''
                 }
-            </wa-card>
+            </div>
         `;
     }
 
