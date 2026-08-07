@@ -35,6 +35,10 @@ export function formatAmount(value: Amount, format: CalculatorFormat): string {
     return format.decimalSeparator === 'DOT' ? fixed : fixed.replace('.', ',');
 }
 
+export function formatAbsoluteAmount(value: Amount, format: CalculatorFormat): string {
+    return formatAmount(value.abs(), format);
+}
+
 export function normalizeExpression(expression: string, format: CalculatorFormat): string {
     let normalized = '';
     let position = 0;

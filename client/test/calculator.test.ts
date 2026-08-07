@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
     CalculatorError,
     evaluateExpression,
+    formatAbsoluteAmount,
     formatAmount,
     normalizeExpression,
     type CalculatorFormat,
@@ -61,6 +62,17 @@ describe('calculator engine', () => {
     it('normalizes history expressions to the Book format', () => {
         expect(normalizeExpression('  1,000   +   2,000  ', dotFormat)).toBe('1000.00 + 2000.00');
         expect(normalizeExpression('1.000,5 + 2,5', commaFormat)).toBe('1000,500 + 2,500');
+    });
+
+    it('formats absolute result values for copying', () => {
+        const format: CalculatorFormat = {
+            decimalSeparator: 'DOT',
+            fractionDigits: 3,
+        };
+        const result = evaluateExpression('458.730 - 496.370', format);
+
+        expect(result.formatted).toBe('-37.640');
+        expect(formatAbsoluteAmount(result.value, format)).toBe('37.640');
     });
 
     it('formats values using the book separator and fraction digits', () => {

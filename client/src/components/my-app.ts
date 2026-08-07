@@ -1,6 +1,10 @@
 import { LitElement, html, css, type PropertyValues } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { evaluateExpression, normalizeExpression } from '../calculator/calculator';
+import {
+    evaluateExpression,
+    formatAbsoluteAmount,
+    normalizeExpression,
+} from '../calculator/calculator';
 import { createHistoryStore, type HistoryEntry } from '../calculator/history';
 import { AppController } from '../app/app-controller';
 import type { AppState } from '../app/app-state';
@@ -80,6 +84,10 @@ export class MyApp extends LitElement {
             margin-inline-start: auto;
         }
 
+        .copy-button::part(base) {
+            min-width: 3.5rem;
+        }
+
         .history-entry {
             width: 100%;
         }
@@ -117,6 +125,7 @@ export class MyApp extends LitElement {
     private expression = '';
     private calculationError: string | null = null;
     private hasResult = false;
+    private copyValue: string | null = null;
     private historyEntries: HistoryEntry[] = [];
     private historyBookId: string | null = null;
     private historyStore?: ReturnType<typeof createHistoryStore>;
@@ -217,7 +226,26 @@ export class MyApp extends LitElement {
                             spellcheck="false"
                             @input=${this.handleInput}
                             @keydown=${this.handleKeydown}
-                        ></wa-input>
+                        >
+                            ${
+                                this.hasResult
+                                    ? html`
+                                          <wa-button
+                                              slot="end"
+                                              class="copy-button"
+                                              type="button"
+                                              variant="neutral"
+                                              appearance="plain"
+                                              aria-label="Copy absolute result"
+                                              title="Copy absolute result"
+                                              @click=${this.handleCopyResult}
+                                          >
+                                              <wa-icon name="copy" aria-hidden="true"></wa-icon>
+                                          </wa-button>
+                                      `
+                                    : ''
+                            }
+                        </wa-input>
                         <wa-button
                             class="calculate-button"
                             type="submit"
@@ -318,6 +346,7 @@ export class MyApp extends LitElement {
         const input = event.currentTarget as CalculatorInputElement;
         this.expression = input.value;
         this.hasResult = false;
+        this.copyValue = null;
         this.calculationError = null;
     };
 
@@ -329,6 +358,7 @@ export class MyApp extends LitElement {
         event.preventDefault();
         this.expression = event.key;
         this.hasResult = false;
+        this.copyValue = null;
         this.calculationError = null;
         this.focusInputAfterUpdate = true;
         this.requestUpdate();
@@ -355,10 +385,12 @@ export class MyApp extends LitElement {
             this.historyEntries = this.historyStore.get();
             this.expression = calculation.formatted;
             this.hasResult = true;
+            this.copyValue = formatAbsoluteAmount(calculation.value, state.format);
             this.calculationError = null;
             this.focusInputAfterUpdate = true;
             this.requestUpdate();
         } catch (error) {
+            this.copyValue = null;
             this.calculationError = error instanceof Error ? error.message : String(error);
             this.requestUpdate();
         }
@@ -367,9 +399,23 @@ export class MyApp extends LitElement {
     private handleClearInput = (): void => {
         this.expression = '';
         this.hasResult = false;
+        this.copyValue = null;
         this.calculationError = null;
         this.focusInputAfterUpdate = true;
         this.requestUpdate();
+    };
+
+    private handleCopyResult = async (): Promise<void> => {
+        if (this.copyValue === null) {
+            return;
+        }
+
+        try {
+            await copyTextToClipboard(this.copyValue);
+        } catch {
+            this.calculationError = 'Could not copy the result.';
+            this.requestUpdate();
+        }
     };
 
     private handleClearHistory = (): void => {
@@ -381,6 +427,7 @@ export class MyApp extends LitElement {
     private restoreHistory(entry: HistoryEntry): void {
         this.expression = entry.expression;
         this.hasResult = false;
+        this.copyValue = null;
         this.calculationError = null;
         this.focusInputAfterUpdate = true;
         this.requestUpdate();
@@ -389,6 +436,29 @@ export class MyApp extends LitElement {
     private handleRetry = (): void => {
         void this.controller.retry();
     };
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+    if (window.navigator.clipboard?.writeText) {
+        await window.navigator.clipboard.writeText(value);
+        return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.append(textarea);
+    textarea.select();
+
+    try {
+        if (!document.execCommand('copy')) {
+            throw new Error('Clipboard copy failed.');
+        }
+    } finally {
+        textarea.remove();
+    }
 }
 
 function startsNewExpression(key: string): boolean {

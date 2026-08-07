@@ -81,6 +81,63 @@ describe('MyApp component', () => {
         expect(calculateButton?.textContent?.trim()).toBe('');
         expect(clearButton?.getAttribute('aria-label')).toBe('Clear');
         expect(clearButton?.textContent?.trim()).toBe('C');
+        expect(container.querySelector('.copy-button')).toBeNull();
+    });
+
+    it('shows a copy control after calculation and copies the absolute result', async () => {
+        let copiedValue: string | null = null;
+        Object.defineProperty(window.navigator, 'clipboard', {
+            configurable: true,
+            value: {
+                writeText: async (value: string) => {
+                    copiedValue = value;
+                },
+            },
+        });
+
+        const app = new MyApp(
+            createController({
+                status: 'ready',
+                bookId: 'copy-test-book',
+                bookName: 'Main Book',
+                format: {
+                    bookId: 'copy-test-book',
+                    bookName: 'Main Book',
+                    decimalSeparator: 'DOT',
+                    fractionDigits: 3,
+                },
+                error: null,
+            })
+        );
+        document.body.append(app);
+        await app.updateComplete;
+
+        const input = app.shadowRoot?.querySelector('wa-input') as
+            | (HTMLElement & {
+                  value: string;
+              })
+            | null;
+        const form = app.shadowRoot?.querySelector('form');
+
+        if (!input || !form) {
+            throw new Error('Calculator form did not render');
+        }
+
+        input.value = '458.730 - 496.370';
+        input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await app.updateComplete;
+
+        const copyButton = app.shadowRoot?.querySelector('.copy-button');
+        expect(copyButton?.getAttribute('aria-label')).toBe('Copy absolute result');
+
+        copyButton?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(input.value).toBe('-37.640');
+        expect(copiedValue).toBe('37.640');
+        app.remove();
+        window.sessionStorage.removeItem('bkper-in-app-calculator:copy-test-book');
     });
 
     it('places clear history below the history card', () => {
