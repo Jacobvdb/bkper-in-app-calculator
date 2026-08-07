@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { render } from 'lit';
 import '../src/web-awesome';
-import { MyApp } from '../src/components/my-app';
+import { copyTextToClipboard, MyApp } from '../src/components/my-app';
 import type { AppState } from '../src/app/app-state';
 
 function createController(state: AppState) {
@@ -138,6 +138,40 @@ describe('MyApp component', () => {
         expect(copiedValue).toBe('37.640');
         app.remove();
         window.sessionStorage.removeItem('bkper-in-app-calculator:copy-test-book');
+    });
+
+    it('falls back to document copy when Clipboard API access is blocked', async () => {
+        let fallbackValue: string | null = null;
+        const originalClipboard = window.navigator.clipboard;
+        const originalExecCommand = document.execCommand;
+
+        Object.defineProperty(window.navigator, 'clipboard', {
+            configurable: true,
+            value: {
+                writeText: async () => {
+                    throw new Error('Clipboard access blocked.');
+                },
+            },
+        });
+        Object.defineProperty(document, 'execCommand', {
+            configurable: true,
+            value: (command: string) => {
+                fallbackValue = document.querySelector('textarea')?.value ?? null;
+                return command === 'copy';
+            },
+        });
+
+        await copyTextToClipboard('37.640');
+
+        expect(fallbackValue).toBe('37.640');
+        Object.defineProperty(window.navigator, 'clipboard', {
+            configurable: true,
+            value: originalClipboard,
+        });
+        Object.defineProperty(document, 'execCommand', {
+            configurable: true,
+            value: originalExecCommand,
+        });
     });
 
     it('places clear history below the history card', () => {

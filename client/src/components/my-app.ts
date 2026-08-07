@@ -438,10 +438,14 @@ export class MyApp extends LitElement {
     };
 }
 
-async function copyTextToClipboard(value: string): Promise<void> {
+export async function copyTextToClipboard(value: string): Promise<void> {
     if (window.navigator.clipboard?.writeText) {
-        await window.navigator.clipboard.writeText(value);
-        return;
+        try {
+            await window.navigator.clipboard.writeText(value);
+            return;
+        } catch {
+            // Embedded apps can expose the API while blocking it with Permissions Policy.
+        }
     }
 
     const textarea = document.createElement('textarea');
