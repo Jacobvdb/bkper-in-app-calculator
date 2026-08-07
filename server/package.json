@@ -1,0 +1,16 @@
+{
+    "name": "bkper-in-app-calculator-server",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "clean": "rm -rf node_modules dist",
+        "test": "bun test",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "hono": "^4"
+    },
+    "devDependencies": {
+        "typescript": "^5"
+    }
+}

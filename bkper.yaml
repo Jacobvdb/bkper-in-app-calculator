@@ -1,0 +1,21 @@
+id: bkper-in-app-calculator
+name: Calculator
+description: A simple in-context calculator for Bkper books.
+logoUrl: https://bkper-in-app-calculator.bkper.app/images/logo-light.svg
+logoUrlDark: https://bkper-in-app-calculator.bkper.app/images/logo-dark.svg
+website: https://bkper-in-app-calculator.bkper.app
+ownerName: Jacob van den Berg
+ownerWebsite: https://github.com/jacobvdb
+repoUrl: https://github.com/jacobvdb/bkper-in-app-calculator
+repoPrivate: false
+developers: jacobvdb3, jacobvandenberg3
+users: '*@bkper.com'
+menuUrl: https://bkper-in-app-calculator.bkper.app?bookId=${book.id}
+menuUrlDev: https://bkper-in-app-calculator-preview.bkper.app?bookId=${book.id}
+menuText: Open Calculator
+menuOpenMode: SIDEBAR
+deployment:
+    server: server/src/index.ts
+    client: client
+    secrets: []
+    compatibility_date: 2026-01-28
