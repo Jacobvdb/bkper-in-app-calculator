@@ -10,8 +10,8 @@ repoUrl: https://github.com/jacobvdb/bkper-in-app-calculator
 repoPrivate: false
 developers: jacobvdb3, jacobvandenberg3
 users: '*@bkper.com'
-menuUrl: https://bkper-in-app-calculator.bkper.app?bookId=${book.id}
-menuUrlDev: https://bkper-in-app-calculator-preview.bkper.app?bookId=${book.id}
+menuUrl: https://bkper-in-app-calculator.bkper.app?bookId=${book.id}&v=0a152cc
+menuUrlDev: https://bkper-in-app-calculator-preview.bkper.app?bookId=${book.id}&v=0a152cc
 menuText: Open Calculator
 menuOpenMode: SIDEBAR
 deployment:
