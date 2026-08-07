@@ -61,7 +61,7 @@ describe('MyApp component', () => {
         expect(input?.getAttribute('aria-label')).toBe('Expression');
         expect(container.textContent).not.toContain('Main Book');
         expect(container.textContent).not.toContain('Calculation');
-        expect(container.textContent).not.toContain('History');
+        expect(container.querySelector('h1, h2, h3')).toBeNull();
         expect(input?.getAttribute('hint')).toBeNull();
         expect(container.querySelector('h1')).toBeNull();
         expect(container.textContent).not.toContain('Calculator');
@@ -82,6 +82,55 @@ describe('MyApp component', () => {
         expect(clearButton?.getAttribute('aria-label')).toBe('Clear');
         expect(clearButton?.textContent?.trim()).toBe('C');
         expect(container.querySelector('.copy-button')).toBeNull();
+    });
+
+    it('opens complete instructions and links to the GitHub repository', async () => {
+        const app = new MyApp(
+            createController({
+                status: 'ready',
+                bookId: 'instructions-test-book',
+                bookName: 'Main Book',
+                format: {
+                    bookId: 'instructions-test-book',
+                    bookName: 'Main Book',
+                    decimalSeparator: 'DOT',
+                    fractionDigits: 2,
+                },
+                error: null,
+            })
+        );
+        document.body.append(app);
+        await app.updateComplete;
+
+        const helpButton = app.shadowRoot?.querySelector('.help-button');
+        const dialog = app.shadowRoot?.querySelector('.instructions-dialog') as
+            (HTMLElement & { open: boolean }) | null;
+        const githubButton = dialog?.querySelector('wa-button[href]');
+
+        expect(helpButton?.getAttribute('aria-label')).toBe('Open calculator instructions');
+        expect(dialog?.getAttribute('label')).toBe('Instructions');
+        expect(dialog?.hasAttribute('light-dismiss')).toBe(true);
+        expect(dialog?.querySelector('.instructions-content')).not.toBeNull();
+        const dialogText = dialog?.textContent?.replace(/\s+/g, ' ') ?? '';
+        expect(dialogText).toContain('Enter or = to calculate');
+        expect(dialogText).toContain('+');
+        expect(dialogText).toContain('Book-specific decimal separator');
+        expect(dialogText).toContain('per Book');
+        const instructionNotes = dialog?.querySelectorAll('.instruction-notes > li');
+        expect(instructionNotes).toHaveLength(4);
+        expect(instructionNotes?.[1]?.querySelectorAll('.instruction-line')).toHaveLength(2);
+        expect(instructionNotes?.[2]?.querySelectorAll('.instruction-line')).toHaveLength(2);
+        expect(githubButton?.getAttribute('href')).toBe(
+            'https://github.com/Jacobvdb/bkper-in-app-calculator'
+        );
+        expect(githubButton?.getAttribute('target')).toBe('_blank');
+        expect(githubButton?.getAttribute('rel')).toBe('noopener noreferrer');
+
+        helpButton?.dispatchEvent(new Event('click', { bubbles: true }));
+        await app.updateComplete;
+
+        expect(dialog?.open).toBe(true);
+        app.remove();
     });
 
     it('shows a copy control after calculation and copies the absolute result', async () => {

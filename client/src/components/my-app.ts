@@ -19,6 +19,8 @@ export interface CalculatorAppController {
     retry(): Promise<void>;
 }
 
+const GITHUB_REPOSITORY_URL = 'https://github.com/Jacobvdb/bkper-in-app-calculator';
+
 @customElement('my-app')
 export class MyApp extends LitElement {
     static styles = css`
@@ -119,9 +121,75 @@ export class MyApp extends LitElement {
             align-items: center;
             color: var(--bkper-color-neutral);
         }
+
+        .support-actions {
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+        }
+
+        .help-button wa-icon,
+        .github-button wa-icon {
+            font-size: var(--bkper-font-size-large);
+        }
+
+        .instructions-dialog {
+            --spacing: var(--bkper-spacing-large);
+        }
+
+        .instructions-content {
+            display: flex;
+            flex-direction: column;
+            gap: var(--bkper-spacing-large);
+            max-block-size: calc(100vh - (var(--bkper-spacing-large) * 4));
+            overflow-y: auto;
+            scrollbar-color: var(--bkper-color-neutral) transparent;
+            scrollbar-width: thin;
+        }
+
+        .instructions-dialog::part(body) {
+            scrollbar-color: var(--bkper-color-neutral) transparent;
+            scrollbar-width: thin;
+        }
+
+        .instruction-list,
+        .instruction-notes {
+            display: flex;
+            flex-direction: column;
+            gap: var(--bkper-spacing-large);
+        }
+
+        .instruction-notes {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .instruction-line {
+            display: block;
+        }
+
+        .instruction-row {
+            display: flex;
+            align-items: center;
+            gap: var(--bkper-spacing-2x-large);
+        }
+
+        .instruction-row wa-icon {
+            font-size: var(--bkper-font-size-large);
+        }
+
+        .dialog-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--bkper-spacing-small);
+            width: 100%;
+        }
     `;
 
     private readonly controller: CalculatorAppController;
+    private instructionsOpen = false;
     private expression = '';
     private calculationError: string | null = null;
     private hasResult = false;
@@ -277,8 +345,127 @@ export class MyApp extends LitElement {
                           `
                         : ''
                 }
-                ${this.renderHistory()}
+                ${this.renderHistory()} ${this.renderSupportActions()}
+                ${this.renderInstructionsDialog()}
             </div>
+        `;
+    }
+
+    private renderSupportActions() {
+        return html`
+            <div class="support-actions wa-cluster wa-justify-content-end">
+                <wa-button
+                    class="help-button"
+                    type="button"
+                    variant="neutral"
+                    appearance="plain"
+                    size="s"
+                    aria-label="Open calculator instructions"
+                    title="Instructions"
+                    @click=${this.openInstructions}
+                >
+                    <wa-icon name="circle-question" aria-hidden="true"></wa-icon>
+                </wa-button>
+            </div>
+        `;
+    }
+
+    private renderInstructionsDialog() {
+        return html`
+            <wa-dialog
+                class="instructions-dialog"
+                label="Instructions"
+                light-dismiss
+                .open=${this.instructionsOpen}
+                @wa-after-hide=${this.handleInstructionsAfterHide}
+            >
+                <div class="instructions-content wa-stack wa-gap-l">
+                    <p>
+                        Enter an expression and press <strong>Enter</strong> or
+                        <strong>=</strong> to calculate it. Standard mathematical precedence is
+                        applied.
+                    </p>
+
+                    <div class="instruction-list wa-stack wa-gap-m">
+                        <div class="instruction-row wa-cluster wa-gap-l">
+                            <wa-button
+                                variant="neutral"
+                                appearance="plain"
+                                disabled
+                                aria-hidden="true"
+                                tabindex="-1"
+                            >
+                                <wa-icon name="copy" aria-hidden="true"></wa-icon>
+                            </wa-button>
+                            <span>Copies the absolute value of the result.</span>
+                        </div>
+                        <div class="instruction-row wa-cluster wa-gap-l">
+                            <wa-button variant="brand" disabled aria-hidden="true" tabindex="-1">
+                                <wa-icon name="equals" aria-hidden="true"></wa-icon>
+                            </wa-button>
+                            <span>Calculates the value.</span>
+                        </div>
+                        <div class="instruction-row wa-cluster wa-gap-l">
+                            <wa-button
+                                variant="neutral"
+                                appearance="outlined"
+                                disabled
+                                aria-hidden="true"
+                                tabindex="-1"
+                            >
+                                C
+                            </wa-button>
+                            <span>Clears the input.</span>
+                        </div>
+                    </div>
+
+                    <ul class="instruction-notes">
+                        <li>
+                            Use <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, and
+                            parentheses. Multiplication must be explicit with <code>*</code>;
+                            implicit multiplication is not accepted.
+                        </li>
+                        <li>
+                            <span class="instruction-line"
+                                >Decimal and negative numbers are supported, including shorthand
+                                values such as <code>.5</code> and <code>5.</code>.</span
+                            >
+                            <span class="instruction-line"
+                                >Scientific notation is not accepted.</span
+                            >
+                        </li>
+                        <li>
+                            <span class="instruction-line"
+                                >Results use the Book-specific decimal separator and fraction
+                                digits.</span
+                            >
+                            <span class="instruction-line"
+                                >The displayed result does not include thousands grouping.</span
+                            >
+                        </li>
+                        <li>
+                            History is kept separately per Book in this browser session, limited to
+                            the latest 20 calculations, and is never written to Bkper.
+                        </li>
+                    </ul>
+                </div>
+                <div slot="footer" class="dialog-footer wa-cluster wa-justify-content-between">
+                    <wa-button
+                        href=${GITHUB_REPOSITORY_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="github-button"
+                        variant="neutral"
+                        appearance="plain"
+                        size="s"
+                        aria-label="Open GitHub repository"
+                        title="Open GitHub repository"
+                    >
+                        <wa-icon family="brands" name="github" aria-hidden="true"></wa-icon>
+                    </wa-button>
+                    <wa-button variant="brand" data-dialog="close">Close</wa-button>
+                </div>
+            </wa-dialog>
         `;
     }
 
@@ -416,6 +603,16 @@ export class MyApp extends LitElement {
             this.calculationError = 'Could not copy the result.';
             this.requestUpdate();
         }
+    };
+
+    private openInstructions = (): void => {
+        this.instructionsOpen = true;
+        this.requestUpdate();
+    };
+
+    private handleInstructionsAfterHide = (): void => {
+        this.instructionsOpen = false;
+        this.requestUpdate();
     };
 
     private handleClearHistory = (): void => {

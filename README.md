@@ -1,6 +1,6 @@
 # Bkper Calculator
 
-Calculator keeps quick arithmetic inside the Bkper context, so you do not need to switch to a phone or another browser tab while working in a Book.
+Working in a Book often involves small calculations. It is easy to reach for a phone, a calculator, or another browser tab, but doing so takes us out of the Book’s context. Calculator is motivated by a simple goal: keep many of these calculations inside the Book, so you can work things out without leaving the context of the Book you are working in.
 
 ## How to use it
 

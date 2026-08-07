@@ -9,5 +9,6 @@ describe('Web Awesome setup', () => {
         expect(customElements.get('wa-input')).toBeDefined();
         expect(customElements.get('wa-icon')).toBeDefined();
         expect(customElements.get('wa-spinner')).toBeDefined();
+        expect(customElements.get('wa-dialog')).toBeDefined();
     });
 });
