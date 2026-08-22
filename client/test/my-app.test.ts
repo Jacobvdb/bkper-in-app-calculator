@@ -133,7 +133,7 @@ describe('MyApp component', () => {
         app.remove();
     });
 
-    it('shows a copy control after calculation and copies the absolute result', async () => {
+    it('copies the absolute result after calculation submit', async () => {
         let copiedValue: string | null = null;
         Object.defineProperty(window.navigator, 'clipboard', {
             configurable: true,
@@ -180,7 +180,6 @@ describe('MyApp component', () => {
         const copyButton = app.shadowRoot?.querySelector('.copy-button');
         expect(copyButton?.getAttribute('aria-label')).toBe('Copy absolute result');
 
-        copyButton?.click();
         await new Promise(resolve => setTimeout(resolve, 0));
 
         expect(input.value).toBe('-37.640');

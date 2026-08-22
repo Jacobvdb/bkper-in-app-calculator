@@ -382,8 +382,8 @@ export class MyApp extends LitElement {
                 <div class="instructions-content wa-stack wa-gap-l">
                     <p>
                         Enter an expression and press <strong>Enter</strong> or
-                        <strong>=</strong> to calculate it. Standard mathematical precedence is
-                        applied.
+                        <strong>=</strong> to calculate it. The absolute result is copied to the
+                        clipboard automatically. Standard mathematical precedence is applied.
                     </p>
 
                     <div class="instruction-list wa-stack wa-gap-m">
@@ -397,7 +397,7 @@ export class MyApp extends LitElement {
                             >
                                 <wa-icon name="copy" aria-hidden="true"></wa-icon>
                             </wa-button>
-                            <span>Copies the absolute value of the result.</span>
+                            <span>Copies the absolute value of the latest result again.</span>
                         </div>
                         <div class="instruction-row wa-cluster wa-gap-l">
                             <wa-button variant="brand" disabled aria-hidden="true" tabindex="-1">
@@ -553,10 +553,10 @@ export class MyApp extends LitElement {
 
     private handleSubmit = (event: Event): void => {
         event.preventDefault();
-        this.calculate();
+        void this.calculate();
     };
 
-    private calculate(): void {
+    private async calculate(): Promise<void> {
         const state = this.controller.state;
         if (!state.format || !this.historyStore) {
             return;
@@ -576,6 +576,7 @@ export class MyApp extends LitElement {
             this.calculationError = null;
             this.focusInputAfterUpdate = true;
             this.requestUpdate();
+            await this.copyResultToClipboard();
         } catch (error) {
             this.copyValue = null;
             this.calculationError = error instanceof Error ? error.message : String(error);
@@ -593,6 +594,10 @@ export class MyApp extends LitElement {
     };
 
     private handleCopyResult = async (): Promise<void> => {
+        await this.copyResultToClipboard();
+    };
+
+    private async copyResultToClipboard(): Promise<void> {
         if (this.copyValue === null) {
             return;
         }
@@ -603,7 +608,7 @@ export class MyApp extends LitElement {
             this.calculationError = 'Could not copy the result.';
             this.requestUpdate();
         }
-    };
+    }
 
     private openInstructions = (): void => {
         this.instructionsOpen = true;
