@@ -3,6 +3,8 @@ import '../src/web-awesome';
 
 describe('Web Awesome setup', () => {
     it('registers the template UI components used by the client', () => {
+        expect(customElements.get('wa-accordion')).toBeDefined();
+        expect(customElements.get('wa-accordion-item')).toBeDefined();
         expect(customElements.get('wa-button')).toBeDefined();
         expect(customElements.get('wa-card')).toBeDefined();
         expect(customElements.get('wa-callout')).toBeDefined();
@@ -10,5 +12,6 @@ describe('Web Awesome setup', () => {
         expect(customElements.get('wa-icon')).toBeDefined();
         expect(customElements.get('wa-spinner')).toBeDefined();
         expect(customElements.get('wa-dialog')).toBeDefined();
+        expect(customElements.get('wa-tooltip')).toBeDefined();
     });
 });

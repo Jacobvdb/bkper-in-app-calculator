@@ -63,13 +63,22 @@ export class MyApp extends LitElement {
 
         .history-list,
         .status-panel,
-        .history-section {
+        .history-accordion {
             width: 100%;
         }
 
-        .history-section {
+        .history-accordion wa-accordion-item {
+            --spacing: var(--bkper-spacing-small, 0.75rem);
+        }
+
+        .history-accordion wa-accordion-item::part(button) {
+            justify-content: flex-end;
+        }
+
+        .history-actions {
             display: flex;
-            flex-direction: column;
+            justify-content: flex-end;
+            width: 100%;
         }
 
         .calculation-form wa-input {
@@ -90,7 +99,23 @@ export class MyApp extends LitElement {
             min-width: 3.5rem;
         }
 
+        .copy-tooltip {
+            --wa-tooltip-background-color: var(--bkper-color-grey-low);
+            --wa-tooltip-border-color: var(--bkper-color-border);
+            --wa-tooltip-border-style: solid;
+            --wa-tooltip-border-width: 1px;
+            --wa-tooltip-content-color: var(--bkper-color-text);
+        }
+
+        .history-entry-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: var(--bkper-spacing-x-small, 0.5rem);
+            width: 100%;
+        }
+
         .history-entry {
+            min-width: 0;
             width: 100%;
         }
 
@@ -98,6 +123,10 @@ export class MyApp extends LitElement {
             width: 100%;
             justify-content: space-between;
             text-align: start;
+        }
+
+        .history-copy-button::part(base) {
+            min-width: 2.75rem;
         }
 
         .expression,
@@ -194,6 +223,8 @@ export class MyApp extends LitElement {
     private calculationError: string | null = null;
     private hasResult = false;
     private copyValue: string | null = null;
+    private copyTooltipOpen = false;
+    private copyTooltipTimeout: number | undefined;
     private historyEntries: HistoryEntry[] = [];
     private historyBookId: string | null = null;
     private historyStore?: ReturnType<typeof createHistoryStore>;
@@ -282,7 +313,20 @@ export class MyApp extends LitElement {
         return html`
             <div class="calculator-shell wa-stack wa-gap-l">
                 <wa-card class="calculation-card" appearance="outlined">
-                    <form class="calculation-form" @submit=${this.handleSubmit}>
+                    <wa-tooltip
+                        class="copy-tooltip"
+                        for="calculation-form"
+                        trigger="manual"
+                        placement="bottom"
+                        .open=${this.copyTooltipOpen}
+                    >
+                        Value Copied
+                    </wa-tooltip>
+                    <form
+                        id="calculation-form"
+                        class="calculation-form"
+                        @submit=${this.handleSubmit}
+                    >
                         <wa-input
                             aria-label="Expression"
                             placeholder="3000 - 2000"
@@ -380,11 +424,15 @@ export class MyApp extends LitElement {
                 @wa-after-hide=${this.handleInstructionsAfterHide}
             >
                 <div class="instructions-content wa-stack wa-gap-l">
-                    <p>
-                        Enter an expression and press <strong>Enter</strong> or
-                        <strong>=</strong> to calculate it. The absolute result is copied to the
-                        clipboard automatically. Standard mathematical precedence is applied.
-                    </p>
+                    <div class="wa-stack wa-gap-s">
+                        <strong>Calculate and copy</strong>
+                        <p>
+                            Enter an expression and press <strong>Enter</strong> or
+                            <strong>=</strong> to calculate it. The absolute result is copied to the
+                            clipboard automatically, and <strong>Value Copied</strong> appears when
+                            the copy succeeds.
+                        </p>
+                    </div>
 
                     <div class="instruction-list wa-stack wa-gap-m">
                         <div class="instruction-row wa-cluster wa-gap-l">
@@ -417,6 +465,15 @@ export class MyApp extends LitElement {
                             </wa-button>
                             <span>Clears the input.</span>
                         </div>
+                    </div>
+
+                    <div class="wa-stack wa-gap-s">
+                        <strong>History</strong>
+                        <p>
+                            Use the chevron to open or close the history. Click a calculation to put
+                            that expression back in the input. Click the copy icon next to a history
+                            row to copy only that result value.
+                        </p>
                     </div>
 
                     <ul class="instruction-notes">
@@ -471,51 +528,91 @@ export class MyApp extends LitElement {
 
     private renderHistory() {
         return html`
-            <div class="history-section wa-stack wa-gap-xs">
-                <wa-card class="history-card" appearance="outlined">
-                    ${
-                        this.historyEntries.length === 0
-                            ? html`<p class="empty-history">Your calculations will appear here.</p>`
-                            : html`
-                                  <div class="history-list wa-stack wa-gap-xs" role="list">
-                                      ${this.historyEntries.map(
-                                          entry => html`
-                                              <wa-button
-                                                  class="history-entry"
-                                                  type="button"
-                                                  variant="neutral"
-                                                  appearance="outlined"
-                                                  @click=${() => this.restoreHistory(entry)}
-                                              >
-                                                  <span class="expression"
-                                                      >${entry.expression}</span
-                                                  >
-                                                  <span class="result">${entry.result}</span>
-                                              </wa-button>
-                                          `
-                                      )}
-                                  </div>
-                              `
-                    }
-                </wa-card>
-                ${
-                    this.historyEntries.length > 0
-                        ? html`
-                              <wa-button
-                                  class="clear-history-button"
-                                  type="button"
-                                  variant="neutral"
-                                  appearance="plain"
-                                  size="s"
-                                  aria-label="Clear history"
-                                  @click=${this.handleClearHistory}
-                              >
-                                  Clear history
-                              </wa-button>
-                          `
-                        : ''
-                }
-            </div>
+            <wa-accordion
+                class="history-accordion"
+                appearance="plain"
+                heading-level="none"
+                icon-placement="end"
+                mode="single-collapsible"
+            >
+                <wa-accordion-item aria-label="History">
+                    <div class="history-section wa-stack wa-gap-xs">
+                        <wa-card class="history-card" appearance="outlined">
+                            ${
+                                this.historyEntries.length === 0
+                                    ? html`<p class="empty-history">
+                                          Your calculations will appear here.
+                                      </p>`
+                                    : html`
+                                          <div class="history-list wa-stack wa-gap-xs" role="list">
+                                              ${this.historyEntries.map(
+                                                  entry => html`
+                                                      <div
+                                                          class="history-entry-row"
+                                                          role="listitem"
+                                                      >
+                                                          <wa-button
+                                                              class="history-entry"
+                                                              type="button"
+                                                              variant="neutral"
+                                                              appearance="outlined"
+                                                              @click=${() => this.restoreHistory(entry)}
+                                                          >
+                                                              <span class="expression"
+                                                                  >${entry.expression}</span
+                                                              >
+                                                              <span class="result"
+                                                                  >${entry.result}</span
+                                                              >
+                                                          </wa-button>
+                                                          <wa-button
+                                                              class="history-copy-button"
+                                                              type="button"
+                                                              variant="neutral"
+                                                              appearance="outlined"
+                                                              aria-label=${`Copy result ${entry.result}`}
+                                                              title="Copy result"
+                                                              @click=${() =>
+                                                                  this.handleCopyHistoryResult(
+                                                                      entry
+                                                                  )}
+                                                          >
+                                                              <wa-icon
+                                                                  name="copy"
+                                                                  aria-hidden="true"
+                                                              ></wa-icon>
+                                                          </wa-button>
+                                                      </div>
+                                                  `
+                                              )}
+                                          </div>
+                                      `
+                            }
+                        </wa-card>
+                        ${
+                            this.historyEntries.length > 0
+                                ? html`
+                                      <div
+                                          class="history-actions wa-cluster wa-justify-content-end"
+                                      >
+                                          <wa-button
+                                              class="clear-history-button"
+                                              type="button"
+                                              variant="neutral"
+                                              appearance="plain"
+                                              size="s"
+                                              aria-label="Clear history"
+                                              @click=${this.handleClearHistory}
+                                          >
+                                              Clear history
+                                          </wa-button>
+                                      </div>
+                                  `
+                                : ''
+                        }
+                    </div>
+                </wa-accordion-item>
+            </wa-accordion>
         `;
     }
 
@@ -534,6 +631,7 @@ export class MyApp extends LitElement {
         this.expression = input.value;
         this.hasResult = false;
         this.copyValue = null;
+        this.copyTooltipOpen = false;
         this.calculationError = null;
     };
 
@@ -546,6 +644,7 @@ export class MyApp extends LitElement {
         this.expression = event.key;
         this.hasResult = false;
         this.copyValue = null;
+        this.copyTooltipOpen = false;
         this.calculationError = null;
         this.focusInputAfterUpdate = true;
         this.requestUpdate();
@@ -588,6 +687,7 @@ export class MyApp extends LitElement {
         this.expression = '';
         this.hasResult = false;
         this.copyValue = null;
+        this.copyTooltipOpen = false;
         this.calculationError = null;
         this.focusInputAfterUpdate = true;
         this.requestUpdate();
@@ -597,17 +697,40 @@ export class MyApp extends LitElement {
         await this.copyResultToClipboard();
     };
 
+    private handleCopyHistoryResult = async (entry: HistoryEntry): Promise<void> => {
+        await this.copyTextValue(entry.result);
+    };
+
     private async copyResultToClipboard(): Promise<void> {
         if (this.copyValue === null) {
             return;
         }
 
+        await this.copyTextValue(this.copyValue);
+    }
+
+    private async copyTextValue(value: string): Promise<void> {
         try {
-            await copyTextToClipboard(this.copyValue);
+            await copyTextToClipboard(value);
+            this.showCopyTooltip();
         } catch {
             this.calculationError = 'Could not copy the result.';
             this.requestUpdate();
         }
+    }
+
+    private showCopyTooltip(): void {
+        if (this.copyTooltipTimeout !== undefined) {
+            window.clearTimeout(this.copyTooltipTimeout);
+        }
+
+        this.copyTooltipOpen = true;
+        this.copyTooltipTimeout = window.setTimeout(() => {
+            this.copyTooltipOpen = false;
+            this.copyTooltipTimeout = undefined;
+            this.requestUpdate();
+        }, 1500);
+        this.requestUpdate();
     }
 
     private openInstructions = (): void => {
@@ -630,6 +753,7 @@ export class MyApp extends LitElement {
         this.expression = entry.expression;
         this.hasResult = false;
         this.copyValue = null;
+        this.copyTooltipOpen = false;
         this.calculationError = null;
         this.focusInputAfterUpdate = true;
         this.requestUpdate();

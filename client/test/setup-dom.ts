@@ -27,6 +27,7 @@ const browserGlobals = [
     ['document', browserWindow.document],
     ['customElements', browserWindow.customElements],
     ['HTMLElement', browserWindow.HTMLElement],
+    ['HTMLSlotElement', browserWindow.HTMLSlotElement],
     ['Element', browserWindow.Element],
     ['Node', browserWindow.Node],
     ['Document', browserWindow.Document],

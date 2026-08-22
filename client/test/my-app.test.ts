@@ -112,7 +112,11 @@ describe('MyApp component', () => {
         expect(dialog?.hasAttribute('light-dismiss')).toBe(true);
         expect(dialog?.querySelector('.instructions-content')).not.toBeNull();
         const dialogText = dialog?.textContent?.replace(/\s+/g, ' ') ?? '';
+        expect(dialogText).toContain('Calculate and copy');
         expect(dialogText).toContain('Enter or = to calculate');
+        expect(dialogText).toContain('Value Copied');
+        expect(dialogText).toContain('Use the chevron');
+        expect(dialogText).toContain('copy only that result value');
         expect(dialogText).toContain('+');
         expect(dialogText).toContain('Book-specific decimal separator');
         expect(dialogText).toContain('per Book');
@@ -178,12 +182,17 @@ describe('MyApp component', () => {
         await app.updateComplete;
 
         const copyButton = app.shadowRoot?.querySelector('.copy-button');
+        const copyTooltip = app.shadowRoot?.querySelector('wa-tooltip') as
+            (HTMLElement & { open: boolean }) | null;
         expect(copyButton?.getAttribute('aria-label')).toBe('Copy absolute result');
 
         await new Promise(resolve => setTimeout(resolve, 0));
+        await app.updateComplete;
 
         expect(input.value).toBe('-37.640');
         expect(copiedValue).toBe('37.640');
+        expect(copyTooltip?.textContent?.trim()).toBe('Value Copied');
+        expect(copyTooltip?.open).toBe(true);
         app.remove();
         window.sessionStorage.removeItem('bkper-in-app-calculator:copy-test-book');
     });
@@ -222,7 +231,59 @@ describe('MyApp component', () => {
         });
     });
 
-    it('places clear history below the history card', () => {
+    it('copies only the historic result from the history copy control', async () => {
+        let copiedValue: string | null = null;
+        Object.defineProperty(window.navigator, 'clipboard', {
+            configurable: true,
+            value: {
+                writeText: async (value: string) => {
+                    copiedValue = value;
+                },
+            },
+        });
+        window.sessionStorage.setItem(
+            'bkper-in-app-calculator:history-copy-book',
+            JSON.stringify([{ expression: '12409.190 - 1700', result: '10709.190' }])
+        );
+
+        const app = new MyApp(
+            createController({
+                status: 'ready',
+                bookId: 'history-copy-book',
+                bookName: 'Main Book',
+                format: {
+                    bookId: 'history-copy-book',
+                    bookName: 'Main Book',
+                    decimalSeparator: 'DOT',
+                    fractionDigits: 3,
+                },
+                error: null,
+            })
+        );
+        document.body.append(app);
+        await app.updateComplete;
+
+        const input = app.shadowRoot?.querySelector('wa-input') as
+            (HTMLElement & { value: string }) | null;
+        const copyButton = app.shadowRoot?.querySelector(
+            '.history-copy-button'
+        ) as HTMLElement | null;
+        const restoreButton = app.shadowRoot?.querySelector('.history-entry');
+
+        expect(copyButton?.getAttribute('aria-label')).toBe('Copy result 10709.190');
+        expect(restoreButton?.textContent).toContain('12409.190 - 1700');
+
+        copyButton?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await app.updateComplete;
+
+        expect(copiedValue).toBe('10709.190');
+        expect(input?.value).toBe('');
+        app.remove();
+        window.sessionStorage.removeItem('bkper-in-app-calculator:history-copy-book');
+    });
+
+    it('renders history in a collapsed chevron accordion', () => {
         window.sessionStorage.setItem(
             'bkper-in-app-calculator:book-1',
             JSON.stringify([{ expression: '1 + 1', result: '2.00' }])
@@ -246,11 +307,18 @@ describe('MyApp component', () => {
 
         render(app.render(), container);
 
-        const section = container.querySelector('.history-section');
-        const children = section ? [...section.children] : [];
+        const accordion = container.querySelector('wa-accordion');
+        const item = container.querySelector('wa-accordion-item');
 
-        expect(children[0]?.classList.contains('history-card')).toBe(true);
-        expect(children[1]?.classList.contains('clear-history-button')).toBe(true);
+        expect(accordion?.classList.contains('history-accordion')).toBe(true);
+        expect(accordion?.getAttribute('appearance')).toBe('plain');
+        expect(accordion?.getAttribute('heading-level')).toBe('none');
+        expect(accordion?.getAttribute('icon-placement')).toBe('end');
+        expect(item?.hasAttribute('expanded')).toBe(false);
+        expect(item?.getAttribute('aria-label')).toBe('History');
+        expect(item?.querySelector('[slot="label"]')).toBeNull();
+        expect(item?.querySelector('.history-card')).not.toBeNull();
+        expect(item?.querySelector('.history-actions .clear-history-button')).not.toBeNull();
         window.sessionStorage.removeItem('bkper-in-app-calculator:book-1');
     });
 });
