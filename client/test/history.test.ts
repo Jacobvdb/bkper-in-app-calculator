@@ -35,6 +35,37 @@ describe('calculator history', () => {
         ]);
     });
 
+    it('keeps working in memory when browser storage is unavailable', () => {
+        const blocked: HistoryStorage = {
+            getItem: () => {
+                throw new Error('SecurityError');
+            },
+            setItem: () => {
+                throw new Error('QuotaExceededError');
+            },
+            removeItem: () => {
+                throw new Error('SecurityError');
+            },
+        };
+        const store = createHistoryStore('book-1', blocked);
+
+        expect(store.get()).toEqual([]);
+        expect(() => store.add({ expression: '1 + 1', result: '2.00' })).not.toThrow();
+        expect(store.get()).toEqual([{ expression: '1 + 1', result: '2.00' }]);
+        expect(() => store.clear()).not.toThrow();
+        expect(store.get()).toEqual([]);
+    });
+
+    it('falls back to memory when session storage cannot be accessed', () => {
+        const store = createHistoryStore('book-1', () => {
+            throw new Error('SecurityError');
+        });
+
+        store.add({ expression: '1 + 1', result: '2.00' });
+
+        expect(store.get()).toEqual([{ expression: '1 + 1', result: '2.00' }]);
+    });
+
     it('clears only the selected book history', () => {
         const storage = createStorage();
         const bookOne = createHistoryStore('book-1', storage);

@@ -34,7 +34,7 @@
         "deploy:preview": "bun run build && bkper app sync && bkper app deploy --preview"
     },
     "devDependencies": {
-        "bkper": "latest",
+        "bkper": "^4.22.2",
         "concurrently": "^9",
         "miniflare": "^4",
         "prettier": "^3",

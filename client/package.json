@@ -10,10 +10,10 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@awesome.me/webawesome": "latest",
+        "@awesome.me/webawesome": "^3.11.0",
         "@bkper/web-auth": "^1.1.0",
-        "@bkper/web-design": "latest",
-        "bkper-js": "latest",
+        "@bkper/web-design": "^2.1.0",
+        "bkper-js": "^2.42.0",
         "lit": "^3.3.2"
     },
     "devDependencies": {

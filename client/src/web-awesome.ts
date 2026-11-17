@@ -1,5 +1,5 @@
-// Register only the Web Awesome components used by the starter UI.
-// Add more imports here as the client adopts more Web Awesome components.
+// Register only the Web Awesome components the calculator renders.
+// Add an import here before using a new <wa-*> element.
 import '@awesome.me/webawesome/dist/components/accordion/accordion.js';
 import '@awesome.me/webawesome/dist/components/accordion-item/accordion-item.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';

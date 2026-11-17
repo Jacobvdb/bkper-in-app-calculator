@@ -59,9 +59,53 @@ describe('calculator engine', () => {
         expect(() => evaluateExpression('2(3 + 4)', dotFormat)).toThrow('Expected an operator');
     });
 
-    it('normalizes history expressions to the Book format', () => {
-        expect(normalizeExpression('  1,000   +   2,000  ', dotFormat)).toBe('1000.00 + 2000.00');
-        expect(normalizeExpression('1.000,5 + 2,5', commaFormat)).toBe('1000,500 + 2,500');
+    it('rejects a separator without digits', () => {
+        expect(() => evaluateExpression('.', dotFormat)).toThrow(CalculatorError);
+        expect(() => evaluateExpression(',', commaFormat)).toThrow(CalculatorError);
+        expect(() => evaluateExpression('1 + .', dotFormat)).toThrow(CalculatorError);
+    });
+
+    it('never displays a negative zero', () => {
+        expect(evaluateExpression('1 / 3 * 3 - 1', dotFormat).formatted).toBe('0.00');
+        expect(evaluateExpression('-0.001', dotFormat).formatted).toBe('0.00');
+        expect(evaluateExpression('-0,0001', commaFormat).formatted).toBe('0,000');
+        expect(
+            evaluateExpression('-0.4', { decimalSeparator: 'DOT', fractionDigits: 0 }).formatted
+        ).toBe('0');
+        expect(evaluateExpression('-0.006', dotFormat).formatted).toBe('-0.01');
+    });
+
+    it('uses exactly the fraction digits configured on the Book', () => {
+        const digitsCases: [number, string, string][] = [
+            [0, '3', '2'],
+            [2, '3.33', '2.23'],
+            [3, '3.333', '2.235'],
+            [8, '3.33333333', '2.23456789'],
+        ];
+
+        for (const [fractionDigits, division, addition] of digitsCases) {
+            const format: CalculatorFormat = { decimalSeparator: 'DOT', fractionDigits };
+            expect(evaluateExpression('10 / 3', format).formatted).toBe(division);
+            expect(evaluateExpression('1.23456789 + 1', format).formatted).toBe(addition);
+        }
+    });
+
+    it('keeps history expressions as typed so restoring them reproduces the result', () => {
+        const zeroDigitFormat: CalculatorFormat = { decimalSeparator: 'DOT', fractionDigits: 0 };
+        const cases: [string, CalculatorFormat][] = [
+            ['0.125 * 8', dotFormat],
+            ['2.5 + 2.5', zeroDigitFormat],
+            ['1.000,0005 * 2', commaFormat],
+        ];
+
+        for (const [expression, format] of cases) {
+            const restored = normalizeExpression(expression);
+            expect(evaluateExpression(restored, format).formatted).toBe(
+                evaluateExpression(expression, format).formatted
+            );
+        }
+
+        expect(normalizeExpression('  1,000   +   2,000  ')).toBe('1,000 + 2,000');
     });
 
     it('formats absolute result values for copying', () => {

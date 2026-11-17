@@ -35,13 +35,7 @@ export class AppController implements ReactiveController {
             options.createBookService ?? (auth => createBookService({ auth }));
 
         this.auth = authFactory({
-            onError: error => {
-                this.logger.error('Authentication error:', error);
-                this.setState({
-                    status: 'auth-error',
-                    error: `Authentication failed: ${toErrorMessage(error)}`,
-                });
-            },
+            onError: error => this.setAuthenticationError(error),
         });
         this.bookService = bookServiceFactory(this.auth);
     }

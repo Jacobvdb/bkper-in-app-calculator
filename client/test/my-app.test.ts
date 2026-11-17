@@ -11,6 +11,61 @@ function createController(state: AppState) {
     };
 }
 
+interface CalculatorInput extends HTMLElement {
+    value: string;
+}
+
+async function mountReadyApp(bookId: string, fractionDigits = 2) {
+    const app = new MyApp(
+        createController({
+            status: 'ready',
+            bookId,
+            bookName: 'Main Book',
+            format: { bookId, bookName: 'Main Book', decimalSeparator: 'DOT', fractionDigits },
+            error: null,
+        })
+    );
+    document.body.append(app);
+    await app.updateComplete;
+
+    const input = app.shadowRoot?.querySelector('wa-input') as CalculatorInput | null;
+    const form = app.shadowRoot?.querySelector('form');
+    if (!input || !form) {
+        throw new Error('Calculator form did not render');
+    }
+
+    const settle = async () => {
+        await app.updateComplete;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await app.updateComplete;
+    };
+
+    return {
+        app,
+        input,
+        async type(value: string) {
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+            await settle();
+        },
+        async submit() {
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await settle();
+        },
+        cleanup() {
+            app.remove();
+            window.sessionStorage.removeItem(`bkper-in-app-calculator:${bookId}`);
+        },
+    };
+}
+
+function stubClipboard(onWrite: (value: string) => void) {
+    Object.defineProperty(window.navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async (value: string) => onWrite(value) },
+    });
+}
+
 describe('MyApp component', () => {
     it('renders the loading state with Web Awesome components', () => {
         const app = new MyApp(
@@ -114,7 +169,7 @@ describe('MyApp component', () => {
         const dialogText = dialog?.textContent?.replace(/\s+/g, ' ') ?? '';
         expect(dialogText).toContain('Calculate and copy');
         expect(dialogText).toContain('Enter or = to calculate');
-        expect(dialogText).toContain('Value Copied');
+        expect(dialogText).toContain('absolute result is copied');
         expect(dialogText).toContain('Use the chevron');
         expect(dialogText).toContain('copy only that result value');
         expect(dialogText).toContain('+');
@@ -191,7 +246,7 @@ describe('MyApp component', () => {
 
         expect(input.value).toBe('-37.640');
         expect(copiedValue).toBe('37.640');
-        expect(copyTooltip?.textContent?.trim()).toBe('Value Copied');
+        expect(copyTooltip?.textContent?.trim()).toBe('Copied 37.640');
         expect(copyTooltip?.open).toBe(true);
         app.remove();
         window.sessionStorage.removeItem('bkper-in-app-calculator:copy-test-book');
@@ -283,32 +338,86 @@ describe('MyApp component', () => {
         window.sessionStorage.removeItem('bkper-in-app-calculator:history-copy-book');
     });
 
-    it('renders history in a collapsed chevron accordion', () => {
+    it('clears the calculation error as soon as the user edits the expression', async () => {
+        const calculator = await mountReadyApp('error-clear-book');
+
+        await calculator.type('3000 +');
+        await calculator.submit();
+        const errorCallout = calculator.app.shadowRoot?.querySelector('.calculation-error');
+        expect(errorCallout?.textContent).toContain('Expected a number');
+        expect(errorCallout?.getAttribute('role')).toBe('alert');
+
+        await calculator.type('3000 + 1');
+
+        expect(calculator.app.shadowRoot?.querySelector('.calculation-error')).toBeNull();
+        calculator.cleanup();
+    });
+
+    it('removes the copy control once the result is edited', async () => {
+        stubClipboard(() => undefined);
+        const calculator = await mountReadyApp('copy-hide-book');
+
+        await calculator.type('1 + 1');
+        await calculator.submit();
+        expect(calculator.app.shadowRoot?.querySelector('.copy-button')).not.toBeNull();
+
+        await calculator.type('2.00 *');
+
+        expect(calculator.app.shadowRoot?.querySelector('.copy-button')).toBeNull();
+        calculator.cleanup();
+    });
+
+    it('shows the result even when history cannot be persisted', async () => {
+        stubClipboard(() => undefined);
+        const originalStorage = window.sessionStorage;
+        Object.defineProperty(window, 'sessionStorage', {
+            configurable: true,
+            value: {
+                getItem: () => null,
+                setItem: () => {
+                    throw new Error('QuotaExceededError');
+                },
+                removeItem: () => undefined,
+            },
+        });
+
+        try {
+            const calculator = await mountReadyApp('storage-fail-book');
+
+            await calculator.type('2 + 2');
+            await calculator.submit();
+
+            expect(calculator.input.value).toBe('4.00');
+            expect(calculator.app.shadowRoot?.querySelector('.calculation-error')).toBeNull();
+            expect(calculator.app.shadowRoot?.textContent).toContain('2 + 2');
+            calculator.app.remove();
+        } finally {
+            Object.defineProperty(window, 'sessionStorage', {
+                configurable: true,
+                value: originalStorage,
+            });
+        }
+    });
+
+    it('keeps the full keyboard available and bounds the expression length', async () => {
+        const calculator = await mountReadyApp('input-attrs-book');
+
+        expect(calculator.input.hasAttribute('inputmode')).toBe(false);
+        expect(calculator.input.getAttribute('enterkeyhint')).toBe('go');
+        expect(Number(calculator.input.getAttribute('maxlength'))).toBeGreaterThan(0);
+        calculator.cleanup();
+    });
+
+    it('renders history in a collapsed chevron accordion', async () => {
         window.sessionStorage.setItem(
-            'bkper-in-app-calculator:book-1',
+            'bkper-in-app-calculator:accordion-book',
             JSON.stringify([{ expression: '1 + 1', result: '2.00' }])
         );
+        const calculator = await mountReadyApp('accordion-book');
+        const root = calculator.app.shadowRoot;
 
-        const app = new MyApp(
-            createController({
-                status: 'ready',
-                bookId: 'book-1',
-                bookName: 'Main Book',
-                format: {
-                    bookId: 'book-1',
-                    bookName: 'Main Book',
-                    decimalSeparator: 'DOT',
-                    fractionDigits: 2,
-                },
-                error: null,
-            })
-        );
-        const container = document.createElement('div');
-
-        render(app.render(), container);
-
-        const accordion = container.querySelector('wa-accordion');
-        const item = container.querySelector('wa-accordion-item');
+        const accordion = root?.querySelector('wa-accordion');
+        const item = root?.querySelector('wa-accordion-item');
 
         expect(accordion?.classList.contains('history-accordion')).toBe(true);
         expect(accordion?.getAttribute('appearance')).toBe('plain');
@@ -319,6 +428,6 @@ describe('MyApp component', () => {
         expect(item?.querySelector('[slot="label"]')).toBeNull();
         expect(item?.querySelector('.history-card')).not.toBeNull();
         expect(item?.querySelector('.history-actions .clear-history-button')).not.toBeNull();
-        window.sessionStorage.removeItem('bkper-in-app-calculator:book-1');
+        calculator.cleanup();
     });
 });

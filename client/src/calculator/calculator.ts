@@ -29,37 +29,22 @@ export function evaluateExpression(
 }
 
 export function formatAmount(value: Amount, format: CalculatorFormat): string {
-    const fixed = value.eq(0)
-        ? new Amount(0).toFixed(format.fractionDigits)
-        : value.toFixed(format.fractionDigits);
+    const fixed = stripNegativeZero(value.toFixed(format.fractionDigits));
     return format.decimalSeparator === 'DOT' ? fixed : fixed.replace('.', ',');
+}
+
+// Values that round to zero at the Book's fraction digits must not display as "-0.00".
+function stripNegativeZero(fixed: string): string {
+    return /^-0(?:\.0+)?$/.test(fixed) ? fixed.slice(1) : fixed;
 }
 
 export function formatAbsoluteAmount(value: Amount, format: CalculatorFormat): string {
     return formatAmount(value.abs(), format);
 }
 
-export function normalizeExpression(expression: string, format: CalculatorFormat): string {
-    let normalized = '';
-    let position = 0;
-
-    while (position < expression.length) {
-        const character = expression[position];
-        if (isNumberCharacter(character)) {
-            const start = position;
-            while (position < expression.length && isNumberCharacter(expression[position])) {
-                position += 1;
-            }
-            const token = expression.slice(start, position);
-            normalized += formatAmount(new Amount(normalizeNumberToken(token, format)), format);
-            continue;
-        }
-
-        normalized += character;
-        position += 1;
-    }
-
-    return normalized.replace(/\s+/g, ' ').trim();
+// Keep numbers exactly as typed: rounding them would make restored history compute a different result.
+export function normalizeExpression(expression: string): string {
+    return expression.replace(/\s+/g, ' ').trim();
 }
 
 class ExpressionParser {
@@ -188,6 +173,10 @@ function isNumberCharacter(character: string | undefined): boolean {
 }
 
 function normalizeNumberToken(token: string, format: CalculatorFormat): string {
+    if (!/\d/.test(token)) {
+        throw invalidNumber(token);
+    }
+
     const decimalSeparator = format.decimalSeparator === 'DOT' ? '.' : ',';
     const groupingSeparator = decimalSeparator === '.' ? ',' : '.';
     const decimalIndex = token.indexOf(decimalSeparator);

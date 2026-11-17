@@ -1,18 +1,14 @@
 import { LitElement, html, css, type PropertyValues } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
+import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import {
     evaluateExpression,
     formatAbsoluteAmount,
     normalizeExpression,
 } from '../calculator/calculator';
-import { createHistoryStore, type HistoryEntry } from '../calculator/history';
+import { createHistoryStore, type HistoryEntry, type HistoryStore } from '../calculator/history';
 import { AppController } from '../app/app-controller';
 import type { AppState } from '../app/app-state';
-
-interface CalculatorInputElement extends HTMLElement {
-    value: string;
-    focus(options?: FocusOptions): void;
-}
 
 export interface CalculatorAppController {
     state: AppState;
@@ -20,6 +16,9 @@ export interface CalculatorAppController {
 }
 
 const GITHUB_REPOSITORY_URL = 'https://github.com/Jacobvdb/bkper-in-app-calculator';
+// Bounds parser recursion and exact-arithmetic cost for pasted input; far above any real expression.
+const MAX_EXPRESSION_LENGTH = 200;
+const COPY_TOOLTIP_DURATION_MS = 1500;
 
 @customElement('my-app')
 export class MyApp extends LitElement {
@@ -215,21 +214,36 @@ export class MyApp extends LitElement {
             gap: var(--bkper-spacing-small);
             width: 100%;
         }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            clip-path: inset(50%);
+            white-space: nowrap;
+            border: 0;
+        }
     `;
 
     private readonly controller: CalculatorAppController;
-    private instructionsOpen = false;
-    private expression = '';
-    private calculationError: string | null = null;
-    private hasResult = false;
+
+    @state() private instructionsOpen = false;
+    @state() private expression = '';
+    @state() private calculationError: string | null = null;
+    @state() private hasResult = false;
+    @state() private copyTooltipOpen = false;
+    @state() private copiedValue: string | null = null;
+    @state() private historyEntries: HistoryEntry[] = [];
+
     private copyValue: string | null = null;
-    private copyTooltipOpen = false;
     private copyTooltipTimeout: number | undefined;
-    private historyEntries: HistoryEntry[] = [];
+    private historyStore?: HistoryStore;
     private historyBookId: string | null = null;
-    private historyStore?: ReturnType<typeof createHistoryStore>;
     private focusInputAfterUpdate = false;
-    private focusedInitialInput = false;
 
     constructor(controller?: CalculatorAppController) {
         super();
@@ -255,13 +269,25 @@ export class MyApp extends LitElement {
             return this.renderError('Book settings error', 'Book settings are unavailable.', true);
         }
 
-        this.syncHistory(state.bookId);
-        if (!this.focusedInitialInput) {
-            this.focusInputAfterUpdate = true;
-            this.focusedInitialInput = true;
+        return this.renderCalculator();
+    }
+
+    // Derive per-Book state here, not in render(): rendering must stay free of side effects.
+    protected willUpdate(_changedProperties: PropertyValues): void {
+        const state = this.controller.state;
+        if (state.status !== 'ready' || !state.bookId || this.historyBookId === state.bookId) {
+            return;
         }
 
-        return this.renderCalculator();
+        this.historyBookId = state.bookId;
+        this.historyStore = createHistoryStore(state.bookId);
+        this.historyEntries = this.historyStore.get();
+        this.focusInputAfterUpdate = true;
+    }
+
+    disconnectedCallback(): void {
+        super.disconnectedCallback();
+        window.clearTimeout(this.copyTooltipTimeout);
     }
 
     protected updated(_changedProperties: PropertyValues): void {
@@ -271,10 +297,7 @@ export class MyApp extends LitElement {
 
         this.focusInputAfterUpdate = false;
         window.setTimeout(() => {
-            const input = this.renderRoot.querySelector(
-                'wa-input'
-            ) as CalculatorInputElement | null;
-            input?.focus();
+            this.renderRoot.querySelector<WaInput>('wa-input')?.focus();
         }, 0);
     }
 
@@ -320,7 +343,7 @@ export class MyApp extends LitElement {
                         placement="bottom"
                         .open=${this.copyTooltipOpen}
                     >
-                        Value Copied
+                        Copied ${this.copiedValue}
                     </wa-tooltip>
                     <form
                         id="calculation-form"
@@ -333,8 +356,8 @@ export class MyApp extends LitElement {
                             .value=${this.expression}
                             autofocus
                             autocorrect="off"
-                            enterkeyhint="done"
-                            inputmode="decimal"
+                            enterkeyhint="go"
+                            maxlength=${MAX_EXPRESSION_LENGTH}
                             spellcheck="false"
                             @input=${this.handleInput}
                             @keydown=${this.handleKeydown}
@@ -377,12 +400,21 @@ export class MyApp extends LitElement {
                             C
                         </wa-button>
                     </form>
+                    <p class="visually-hidden" aria-live="polite">
+                        ${this.hasResult ? `Result ${this.expression}` : ''}
+                    </p>
                 </wa-card>
 
                 ${
                     this.calculationError
                         ? html`
-                              <wa-callout variant="danger" appearance="outlined" size="s">
+                              <wa-callout
+                                  class="calculation-error"
+                                  variant="danger"
+                                  appearance="outlined"
+                                  size="s"
+                                  role="alert"
+                              >
                                   <wa-icon slot="icon" name="circle-exclamation"></wa-icon>
                                   ${this.calculationError}
                               </wa-callout>
@@ -429,8 +461,8 @@ export class MyApp extends LitElement {
                         <p>
                             Enter an expression and press <strong>Enter</strong> or
                             <strong>=</strong> to calculate it. The absolute result is copied to the
-                            clipboard automatically, and <strong>Value Copied</strong> appears when
-                            the copy succeeds.
+                            clipboard automatically, and a <strong>Copied</strong> notice shows the
+                            exact value placed on the clipboard.
                         </p>
                     </div>
 
@@ -616,23 +648,18 @@ export class MyApp extends LitElement {
         `;
     }
 
-    private syncHistory(bookId: string): void {
-        if (this.historyBookId === bookId && this.historyStore) {
-            return;
-        }
-
-        this.historyBookId = bookId;
-        this.historyStore = createHistoryStore(bookId);
-        this.historyEntries = this.historyStore.get();
-    }
-
-    private handleInput = (event: Event): void => {
-        const input = event.currentTarget as CalculatorInputElement;
-        this.expression = input.value;
+    // Any edit invalidates the previous result, its copy control, and any pending error.
+    private resetResult(expression: string): void {
+        this.expression = expression;
         this.hasResult = false;
         this.copyValue = null;
         this.copyTooltipOpen = false;
         this.calculationError = null;
+    }
+
+    private handleInput = (event: Event): void => {
+        const input = event.currentTarget as WaInput;
+        this.resetResult(input.value ?? '');
     };
 
     private handleKeydown = (event: KeyboardEvent): void => {
@@ -641,13 +668,8 @@ export class MyApp extends LitElement {
         }
 
         event.preventDefault();
-        this.expression = event.key;
-        this.hasResult = false;
-        this.copyValue = null;
-        this.copyTooltipOpen = false;
-        this.calculationError = null;
+        this.resetResult(event.key);
         this.focusInputAfterUpdate = true;
-        this.requestUpdate();
     };
 
     private handleSubmit = (event: Event): void => {
@@ -657,40 +679,40 @@ export class MyApp extends LitElement {
 
     private async calculate(): Promise<void> {
         const state = this.controller.state;
-        if (!state.format || !this.historyStore) {
+        if (!state.format) {
             return;
         }
 
+        const typedExpression = this.expression;
         try {
-            const calculation = evaluateExpression(this.expression, state.format);
-            const entry = {
-                expression: normalizeExpression(this.expression, state.format),
-                result: calculation.formatted,
-            };
-            this.historyStore.add(entry);
-            this.historyEntries = this.historyStore.get();
+            const calculation = evaluateExpression(typedExpression, state.format);
             this.expression = calculation.formatted;
             this.hasResult = true;
             this.copyValue = formatAbsoluteAmount(calculation.value, state.format);
             this.calculationError = null;
             this.focusInputAfterUpdate = true;
-            this.requestUpdate();
+
+            // History and clipboard are conveniences; the result above must never depend on them.
+            this.recordHistory(normalizeExpression(typedExpression), calculation.formatted);
             await this.copyResultToClipboard();
         } catch (error) {
             this.copyValue = null;
             this.calculationError = error instanceof Error ? error.message : String(error);
-            this.requestUpdate();
         }
     }
 
+    private recordHistory(expression: string, result: string): void {
+        if (!this.historyStore) {
+            return;
+        }
+
+        this.historyStore.add({ expression, result });
+        this.historyEntries = this.historyStore.get();
+    }
+
     private handleClearInput = (): void => {
-        this.expression = '';
-        this.hasResult = false;
-        this.copyValue = null;
-        this.copyTooltipOpen = false;
-        this.calculationError = null;
+        this.resetResult('');
         this.focusInputAfterUpdate = true;
-        this.requestUpdate();
     };
 
     private handleCopyResult = async (): Promise<void> => {
@@ -712,51 +734,41 @@ export class MyApp extends LitElement {
     private async copyTextValue(value: string): Promise<void> {
         try {
             await copyTextToClipboard(value);
-            this.showCopyTooltip();
+            this.showCopyTooltip(value);
         } catch {
             this.calculationError = 'Could not copy the result.';
-            this.requestUpdate();
         }
     }
 
-    private showCopyTooltip(): void {
+    private showCopyTooltip(value: string): void {
         if (this.copyTooltipTimeout !== undefined) {
             window.clearTimeout(this.copyTooltipTimeout);
         }
 
+        this.copiedValue = value;
         this.copyTooltipOpen = true;
         this.copyTooltipTimeout = window.setTimeout(() => {
             this.copyTooltipOpen = false;
             this.copyTooltipTimeout = undefined;
-            this.requestUpdate();
-        }, 1500);
-        this.requestUpdate();
+        }, COPY_TOOLTIP_DURATION_MS);
     }
 
     private openInstructions = (): void => {
         this.instructionsOpen = true;
-        this.requestUpdate();
     };
 
     private handleInstructionsAfterHide = (): void => {
         this.instructionsOpen = false;
-        this.requestUpdate();
     };
 
     private handleClearHistory = (): void => {
         this.historyStore?.clear();
         this.historyEntries = [];
-        this.requestUpdate();
     };
 
     private restoreHistory(entry: HistoryEntry): void {
-        this.expression = entry.expression;
-        this.hasResult = false;
-        this.copyValue = null;
-        this.copyTooltipOpen = false;
-        this.calculationError = null;
+        this.resetResult(entry.expression);
         this.focusInputAfterUpdate = true;
-        this.requestUpdate();
     }
 
     private handleRetry = (): void => {
